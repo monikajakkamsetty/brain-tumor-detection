@@ -1,0 +1,390 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #06101d;
+    color: white;
+}
+
+
+/* NAVIGATION */
+
+nav {
+    height: 75px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 9%;
+
+    border-bottom: 1px solid #1d2b3d;
+}
+
+.logo {
+    font-size: 21px;
+    font-weight: bold;
+}
+
+.nav-links {
+    display: flex;
+    gap: 35px;
+}
+
+.nav-links a {
+    color: #aebdce;
+    text-decoration: none;
+}
+
+.nav-links a:hover {
+    color: white;
+}
+
+
+/* HERO */
+
+.hero {
+    min-height: 600px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 80px 12%;
+}
+
+.hero-content {
+    max-width: 650px;
+}
+
+.tag {
+    color: #55d9ff;
+
+    font-size: 13px;
+
+    letter-spacing: 3px;
+
+    margin-bottom: 20px;
+}
+
+.hero h1 {
+    font-size: 65px;
+
+    line-height: 1.05;
+
+    margin-bottom: 25px;
+}
+
+.hero h1 span {
+    color: #55d9ff;
+}
+
+.hero p {
+    color: #9eafc2;
+
+    font-size: 18px;
+
+    line-height: 1.7;
+}
+
+.start-button {
+    display: inline-block;
+
+    margin-top: 30px;
+
+    padding: 15px 28px;
+
+    background: #55d9ff;
+
+    color: #06101d;
+
+    border-radius: 8px;
+
+    text-decoration: none;
+
+    font-weight: bold;
+}
+
+.brain {
+    font-size: 200px;
+}
+
+
+/* DETECTOR */
+
+.detector {
+    padding: 90px 12%;
+
+    text-align: center;
+
+    background: #0b1828;
+}
+
+.detector h2 {
+    font-size: 38px;
+}
+
+.subtitle {
+    color: #9eafc2;
+
+    margin: 15px 0 40px;
+}
+
+
+/* UPLOAD */
+
+.upload-box {
+    max-width: 600px;
+
+    margin: auto;
+
+    padding: 55px;
+
+    border: 2px dashed #34485f;
+
+    border-radius: 16px;
+
+    background: #101f31;
+}
+
+.upload-icon {
+    font-size: 45px;
+
+    color: #55d9ff;
+}
+
+.upload-box h3 {
+    margin: 15px 0 8px;
+}
+
+.upload-box p {
+    color: #8193a8;
+
+    margin-bottom: 25px;
+}
+
+input[type="file"] {
+    max-width: 100%;
+
+    color: #b9c6d4;
+}
+
+
+/* BUTTON */
+
+.predict-button {
+    margin-top: 25px;
+
+    padding: 15px 35px;
+
+    border: none;
+
+    border-radius: 8px;
+
+    background: #55d9ff;
+
+    color: #06101d;
+
+    font-size: 16px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+.predict-button:hover {
+    opacity: 0.85;
+}
+
+
+/* RESULT */
+
+.result-card {
+    max-width: 700px;
+
+    margin: 50px auto 0;
+
+    padding: 35px;
+
+    background: #101f31;
+
+    border-radius: 16px;
+}
+
+.preview {
+    display: block;
+
+    max-width: 350px;
+    max-height: 350px;
+
+    margin: 25px auto;
+
+    border-radius: 10px;
+}
+
+.prediction p {
+    color: #899bb0;
+}
+
+.prediction h1 {
+    font-size: 45px;
+
+    color: #55d9ff;
+
+    margin: 10px;
+}
+
+.confidence {
+    color: #a9b8c9;
+
+    font-size: 18px;
+}
+
+.confidence strong {
+    color: white;
+}
+
+
+/* ERROR */
+
+.error {
+    max-width: 600px;
+
+    margin: 30px auto;
+
+    padding: 15px;
+
+    background: #4d2222;
+
+    border-radius: 8px;
+}
+
+
+/* ABOUT */
+
+.about {
+    padding: 90px 12%;
+
+    text-align: center;
+}
+
+.about h2 {
+    font-size: 38px;
+}
+
+.about > p {
+    max-width: 700px;
+
+    margin: 20px auto;
+
+    color: #9eafc2;
+
+    line-height: 1.7;
+}
+
+
+/* STEPS */
+
+.steps {
+    display: flex;
+
+    justify-content: center;
+
+    gap: 25px;
+
+    margin-top: 45px;
+}
+
+.step {
+    width: 250px;
+
+    padding: 30px;
+
+    background: #101f31;
+
+    border-radius: 12px;
+}
+
+.step span {
+    color: #55d9ff;
+
+    font-size: 25px;
+}
+
+.step h3 {
+    margin: 15px;
+}
+
+.step p {
+    color: #899bb0;
+
+    line-height: 1.5;
+}
+
+
+/* FOOTER */
+
+footer {
+    padding: 35px;
+
+    text-align: center;
+
+    color: #74869b;
+
+    border-top: 1px solid #1d2b3d;
+}
+
+footer small {
+    display: block;
+
+    margin-top: 10px;
+
+    color: #56677a;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 768px) {
+
+    nav {
+        padding: 0 5%;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .hero {
+        flex-direction: column;
+
+        text-align: center;
+
+        padding: 70px 7%;
+    }
+
+    .hero h1 {
+        font-size: 45px;
+    }
+
+    .brain {
+        font-size: 120px;
+
+        margin-top: 50px;
+    }
+
+    .steps {
+        flex-direction: column;
+
+        align-items: center;
+    }
+
+}

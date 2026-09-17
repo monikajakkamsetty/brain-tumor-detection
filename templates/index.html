@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Brain Tumor AI</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+
+<body>
+
+
+<!-- NAVIGATION -->
+
+<nav>
+
+    <div class="logo">
+        🧠 Brain Tumor AI
+    </div>
+
+    <div class="nav-links">
+
+        <a href="#home">Home</a>
+
+        <a href="#detector">Detection</a>
+
+        <a href="#about">About</a>
+
+    </div>
+
+</nav>
+
+
+
+<!-- HERO -->
+
+<section id="home" class="hero">
+
+    <div class="hero-content">
+
+        <div class="tag">
+            AI-POWERED MRI ANALYSIS
+        </div>
+
+        <h1>
+            Brain Tumor
+            <span>Detection</span>
+        </h1>
+
+        <p>
+            Upload an MRI brain image and use the trained
+            CNN model to analyze the scan.
+        </p>
+
+        <a href="#detector"
+           class="start-button">
+
+            Start Detection →
+
+        </a>
+
+    </div>
+
+
+    <div class="brain">
+        🧠
+    </div>
+
+</section>
+
+
+
+<!-- DETECTOR -->
+
+<section id="detector"
+         class="detector">
+
+
+    <h2>
+        Upload MRI Scan
+    </h2>
+
+    <p class="subtitle">
+        Upload a JPG, JPEG or PNG brain MRI image
+    </p>
+
+
+    <form method="POST"
+          enctype="multipart/form-data">
+
+
+        <div class="upload-box">
+
+            <div class="upload-icon">
+                ↑
+            </div>
+
+
+            <h3>
+                Select MRI Image
+            </h3>
+
+
+            <p>
+                Choose a brain MRI image
+            </p>
+
+
+            <input
+                type="file"
+                name="image"
+                accept=".jpg,.jpeg,.png"
+                required
+            >
+
+        </div>
+
+
+        <button
+            type="submit"
+            class="predict-button">
+
+            Analyze MRI
+
+        </button>
+
+
+    </form>
+
+
+
+    <!-- ERROR -->
+
+    {% if error %}
+
+    <div class="error">
+
+        ❌ {{ error }}
+
+    </div>
+
+    {% endif %}
+
+
+
+    <!-- RESULT -->
+
+    {% if result %}
+
+    <div class="result-card">
+
+        <div class="result-icon">
+
+            {% if result == "Tumor Detected" %}
+                ⚠️
+            {% else %}
+                ✓
+            {% endif %}
+
+        </div>
+
+
+        <p class="result-title">
+            Prediction Result
+        </p>
+
+
+        <h1 class="result-text">
+
+            {{ result }}
+
+        </h1>
+
+
+        <div class="confidence">
+
+            Confidence:
+
+            <strong>
+                {{ "%.2f"|format(confidence) }}%
+            </strong>
+
+        </div>
+
+
+        <div class="probability">
+
+            Raw tumor probability:
+
+            <strong>
+                {{ "%.4f"|format(probability) }}
+            </strong>
+
+        </div>
+
+
+        <div class="result-message">
+
+            {% if result == "Tumor Detected" %}
+
+                The CNN model classified this MRI image
+                as showing features associated with a tumor.
+
+            {% else %}
+
+                The CNN model classified this MRI image
+                as not showing features associated with a tumor.
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+</section>
+
+
+
+<!-- ABOUT -->
+
+<section id="about"
+         class="about">
+
+
+    <h2>
+        About This Project
+    </h2>
+
+
+    <p>
+
+        This project uses a Convolutional Neural Network
+        trained on brain MRI images to classify images
+        into tumor and healthy categories.
+
+    </p>
+
+
+    <div class="steps">
+
+
+        <div class="step">
+
+            <span>01</span>
+
+            <h3>
+                Upload
+            </h3>
+
+            <p>
+                Select a brain MRI image.
+            </p>
+
+        </div>
+
+
+        <div class="step">
+
+            <span>02</span>
+
+            <h3>
+                Analyze
+            </h3>
+
+            <p>
+                The trained CNN processes the image.
+            </p>
+
+        </div>
+
+
+        <div class="step">
+
+            <span>03</span>
+
+            <h3>
+                Result
+            </h3>
+
+            <p>
+                View the model classification.
+            </p>
+
+        </div>
+
+
+    </div>
+
+
+</section>
+
+
+
+<footer>
+
+    Brain Tumor Detection System
+
+    <br>
+
+    <small>
+        For educational/research use only.
+        Model output is not a medical diagnosis.
+    </small>
+
+</footer>
+
+
+</body>
+
+</html>
