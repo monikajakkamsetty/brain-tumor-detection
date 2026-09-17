@@ -141,32 +141,19 @@
 
     <!-- ERROR -->
 
-    {% if error %}
+    {% if image_url %}
 
-    <div class="error">
+<div class="image-preview">
 
-        ❌ {{ error }}
+    <h3>Uploaded MRI Image</h3>
 
-    </div>
+    <img src="{{ image_url }}"
+         alt="Uploaded MRI Image"
+         class="mri-image">
 
-    {% endif %}
+</div>
 
-
-
-    <!-- RESULT -->
-
-    {% if result %}
-
-    <div class="result-card">
-
-        <div class="result-icon">
-
-            {% if result == "Tumor Detected" %}
-                ⚠️
-            {% else %}
-                ✓
-            {% endif %}
-
+{% endif %}
         </div>
 
 
