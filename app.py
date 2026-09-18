@@ -1,168 +1,205 @@
+import base64
+import io
+import logging
 import os
-import uuid
+import threading
  
-from flask import Flask, render_template, request, url_for
-from werkzeug.utils import secure_filename
-from PIL import Image, UnidentifiedImageError
+# Must be set before TensorFlow is imported
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+ 
 import numpy as np
+from flask import Flask, jsonify, render_template, request
+from PIL import Image, ImageOps, UnidentifiedImageError
  
 # -----------------------------
 # Config
 # -----------------------------
-MODEL_PATH = "brain_tumor_model.keras"
-UPLOAD_FOLDER = "static/uploads"
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+MODEL_PATH = os.environ.get("MODEL_PATH", "brain_tumor_model.keras")
 MAX_CONTENT_LENGTH = 8 * 1024 * 1024  # 8 MB
  
+# Actual image formats accepted (checked from file contents, not the filename)
+ALLOWED_FORMATS = {"PNG": "png", "JPEG": "jpeg"}
+ 
+# These MUST match how the model was trained:
+RESCALE = 1.0 / 255.0     # set to 1.0 if the model has its own Rescaling layer
+TUMOR_CLASS_INDEX = 1     # index of "tumor" for a 2-class softmax output
+THRESHOLD = 0.5
+ 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("brain-tumor-app")
+ 
 app = Flask(__name__)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
  
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+ 
+class UserError(Exception):
+    """An error whose message is safe to show to the user."""
+ 
  
 # -----------------------------
-# Load model
+# Model loading (background thread)
+#
+# The model is loaded in a background thread so gunicorn binds the port and
+# answers requests immediately. Loading TensorFlow at import time blocks the
+# worker, hits gunicorn's timeout, and the proxy returns 502.
 # -----------------------------
-model = None
-model_load_error = None
+_model = None
+_model_error = None
+_state_lock = threading.Lock()
+_predict_lock = threading.Lock()
+_loader_pid = None
  
-try:
-    from tensorflow.keras.models import load_model
  
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model file not found at '{MODEL_PATH}'")
+def _load_model():
+    global _model, _model_error
+    try:
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model file not found at '{MODEL_PATH}'")
  
-    print("Loading model...", flush=True)
-    model = load_model(MODEL_PATH, compile=False)
-    print("Model loaded successfully!", flush=True)
-    print("Model input shape:", model.input_shape, flush=True)
+        logger.info("Loading model...")
+        from tensorflow.keras.models import load_model
  
-except Exception as e:
-    model_load_error = str(e)
-    print("ERROR loading model:", model_load_error, flush=True)
+        model = load_model(MODEL_PATH, compile=False)
+        logger.info("Model loaded. Input shape: %s", model.input_shape)
+ 
+        # Warm-up so the first real request isn't slow
+        shape = [1] + [d or 1 for d in model.input_shape[1:]]
+        model(np.zeros(shape, dtype="float32"), training=False)
+ 
+        _model = model
+        logger.info("Model ready.")
+    except Exception as e:
+        _model_error = str(e)
+        logger.exception("Failed to load model")
+ 
+ 
+def start_model_loading():
+    """Start the loader thread once per process (safe to call repeatedly)."""
+    global _loader_pid
+    with _state_lock:
+        if _loader_pid == os.getpid():
+            return
+        _loader_pid = os.getpid()
+    threading.Thread(target=_load_model, daemon=True).start()
+ 
+ 
+start_model_loading()
  
  
 # -----------------------------
 # Helpers
 # -----------------------------
-def allowed_file(filename):
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-    )
+def decode_image(data):
+    """Open and validate an uploaded image from raw bytes."""
+    try:
+        img = Image.open(io.BytesIO(data))
+    except (UnidentifiedImageError, OSError):
+        raise UserError("That file doesn't look like a valid image. Please try another.")
+ 
+    if img.format not in ALLOWED_FORMATS:
+        raise UserError("Unsupported file type. Please upload a JPG, JPEG, or PNG image.")
+    return img
  
  
-def predict_image(image_path):
+def predict_image(img):
     """
-    Runs the model on the given image and returns:
-      result       -> "Tumor Detected" / "No Tumor Detected"
-      confidence   -> confidence in the predicted class, as a percentage
-      probability  -> raw probability that the image shows a tumor
-    Handles both a single sigmoid output (shape [..., 1]) and a
-    two-class softmax output (shape [..., 2]).
+    Returns (result, confidence_percent, tumor_probability).
+    Supports a single sigmoid output or a 2-class softmax output.
     """
+    model = _model
     input_shape = model.input_shape
-    height = input_shape[1]
-    width = input_shape[2]
-    channels = input_shape[3] if len(input_shape) > 3 else 3
+    height, width = input_shape[1], input_shape[2]
+    channels = input_shape[3] if len(input_shape) > 3 and input_shape[3] else 3
  
-    mode = "L" if channels == 1 else "RGB"
+    img = ImageOps.exif_transpose(img)
+    img = img.convert("L" if channels == 1 else "RGB")
+    img = img.resize((width, height), Image.Resampling.BILINEAR)
  
-    image = Image.open(image_path).convert(mode)
-    image = image.resize((width, height))
+    arr = np.asarray(img, dtype="float32") * RESCALE
+    if arr.ndim == 2:
+        arr = np.expand_dims(arr, axis=-1)
+    batch = np.expand_dims(arr, axis=0)
  
-    image_array = np.array(image).astype("float32") / 255.0
+    with _predict_lock:
+        output = np.ravel(np.asarray(model(batch, training=False)))
  
-    if channels == 1 and image_array.ndim == 2:
-        image_array = np.expand_dims(image_array, axis=-1)
- 
-    image_array = np.expand_dims(image_array, axis=0)
- 
-    prediction = model.predict(image_array, verbose=0)
-    print("Raw model output:", prediction, flush=True)
- 
-    output = prediction[0]
- 
-    if output.shape[-1] == 1:
-        # Single sigmoid unit: probability of "tumor" class
+    if output.size == 1:
         probability = float(output[0])
-    elif output.shape[-1] == 2:
-        # Two-class softmax: assume index 1 == "tumor"
-        probability = float(output[1])
+    elif output.size == 2:
+        probability = float(output[TUMOR_CLASS_INDEX])
     else:
         raise ValueError(
-            f"Unexpected model output shape: {output.shape}. "
+            f"Unexpected model output size: {output.size}. "
             "Expected a single sigmoid value or a 2-class softmax."
         )
  
-    if probability >= 0.5:
-        result = "Tumor Detected"
-        confidence = probability * 100
-    else:
-        result = "No Tumor Detected"
-        confidence = (1 - probability) * 100
- 
-    return result, confidence, probability
+    if probability >= THRESHOLD:
+        return "Tumor Detected", probability * 100, probability
+    return "No Tumor Detected", (1 - probability) * 100, probability
  
  
 # -----------------------------
 # Routes
 # -----------------------------
+@app.route("/healthz")
+def healthz():
+    """Responds immediately, even while the model is still loading."""
+    return jsonify(status="ok", model_ready=_model is not None), 200
+ 
+ 
 @app.route("/", methods=["GET", "POST"])
 def home():
-    result = None
-    confidence = None
-    probability = None
-    error = None
-    image_url = None
+    start_model_loading()
  
-    if request.method == "POST":
-        print("\n----------------------------- New image received", flush=True)
+    if request.method == "GET":
+        return render_template("index.html")
  
-        if model is None:
-            error = f"Model failed to load: {model_load_error}"
-            return render_template("index.html", error=error)
+    # ---- POST ----
+    if _model is None:
+        if _model_error:
+            logger.error("Model unavailable: %s", _model_error)
+            return render_template(
+                "index.html",
+                error="The prediction model is unavailable. Please try again later.",
+            ), 500
+        return render_template(
+            "index.html",
+            error="The model is still loading. Please wait a few seconds and try again.",
+        ), 503
  
-        if "image" not in request.files or request.files["image"].filename == "":
-            error = "Please select an MRI image."
-            return render_template("index.html", error=error)
+    file = request.files.get("image")
+    if file is None or file.filename == "":
+        return render_template("index.html", error="Please select an MRI image.")
  
-        file = request.files["image"]
+    try:
+        data = file.read()
+        img = decode_image(data)
+        image_format = ALLOWED_FORMATS[img.format]
  
-        if not allowed_file(file.filename):
-            error = "Unsupported file type. Please upload a JPG, JPEG, or PNG image."
-            return render_template("index.html", error=error)
+        result, confidence, probability = predict_image(img)
  
-        try:
-            extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-            filename = f"{uuid.uuid4()}.{extension}"
-            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        # Preview is embedded in the page; nothing is written to disk.
+        image_url = f"data:image/{image_format};base64,{base64.b64encode(data).decode()}"
  
-            file.save(filepath)
-            print("Image saved:", filepath, flush=True)
+        logger.info("Prediction: %s (p=%.4f)", result, probability)
+        return render_template(
+            "index.html",
+            result=result,
+            confidence=confidence,
+            probability=probability,
+            image_url=image_url,
+        )
  
-            image_url = url_for("static", filename=f"uploads/{filename}")
- 
-            result, confidence, probability = predict_image(filepath)
- 
-            print("RESULT:", result, flush=True)
-            print("CONFIDENCE:", confidence, flush=True)
-            print("PROBABILITY:", probability, flush=True)
- 
-        except UnidentifiedImageError:
-            error = "That file doesn't look like a valid image. Please try another."
-        except Exception as e:
-            print("ERROR:", repr(e), flush=True)
-            error = f"Prediction error: {e}"
- 
-    return render_template(
-        "index.html",
-        result=result,
-        confidence=confidence,
-        probability=probability,
-        error=error,
-        image_url=image_url,
-    )
+    except UserError as e:
+        return render_template("index.html", error=str(e))
+    except Image.DecompressionBombError:
+        return render_template("index.html", error="That image is too large to process.")
+    except Exception:
+        logger.exception("Prediction failed")
+        return render_template(
+            "index.html",
+            error="Something went wrong while analysing the image. Please try another.",
+        ), 500
  
  
 @app.errorhandler(413)
@@ -176,9 +213,5 @@ def too_large(e):
 # Local development
 # -----------------------------
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 5000)),
-        debug=False,
-    )
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
  
