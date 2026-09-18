@@ -45,46 +45,73 @@ class UserError(Exception):
 # -----------------------------
 _model = None
 _model_error = None
+
 _state_lock = threading.Lock()
 _predict_lock = threading.Lock()
+_model_ready_event = threading.Event()
 _loader_pid = None
- 
- 
+
+
 def _load_model():
     global _model, _model_error
+
     try:
         if not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(f"Model file not found at '{MODEL_PATH}'")
- 
+            raise FileNotFoundError(
+                f"Model file not found at '{MODEL_PATH}'"
+            )
+
         logger.info("Loading model...")
+
         from tensorflow.keras.models import load_model
- 
+
         model = load_model(MODEL_PATH, compile=False)
-        logger.info("Model loaded. Input shape: %s", model.input_shape)
- 
-        # Warm-up so the first real request isn't slow
-        shape = [1] + [d or 1 for d in model.input_shape[1:]]
-        model(np.zeros(shape, dtype="float32"), training=False)
- 
+
+        logger.info(
+            "Model loaded. Input shape: %s",
+            model.input_shape
+        )
+
+        # Warm-up prediction
+        shape = [1] + [
+            d or 1 for d in model.input_shape[1:]
+        ]
+
+        model(
+            np.zeros(shape, dtype="float32"),
+            training=False
+        )
+
         _model = model
+
         logger.info("Model ready.")
+
     except Exception as e:
         _model_error = str(e)
         logger.exception("Failed to load model")
- 
- 
+
+    finally:
+        _model_ready_event.set()
+
+
 def start_model_loading():
-    """Start the loader thread once per process (safe to call repeatedly)."""
+    """Start model loading once per process."""
     global _loader_pid
+
     with _state_lock:
+
         if _loader_pid == os.getpid():
             return
+
         _loader_pid = os.getpid()
-    threading.Thread(target=_load_model, daemon=True).start()
- 
- 
+
+        threading.Thread(
+            target=_load_model,
+            daemon=True
+        ).start()
+
+
 start_model_loading()
- 
  
 # -----------------------------
 # Helpers
@@ -156,16 +183,26 @@ def home():
  
     # ---- POST ----
     if _model is None:
-        if _model_error:
-            logger.error("Model unavailable: %s", _model_error)
-            return render_template(
-                "index.html",
-                error="The prediction model is unavailable. Please try again later.",
-            ), 500
+
+    # Wait up to 120 seconds for TensorFlow model loading
+    _model_ready_event.wait(timeout=120)
+
+    if _model_error:
+        logger.error(
+            "Model unavailable: %s",
+            _model_error
+        )
+
         return render_template(
             "index.html",
-            error="The model is still loading. Please wait a few seconds and try again.",
-        ), 503
+            error="The prediction model is unavailable. Please try again later.",
+        ), 500
+
+    if _model is None:
+        return render_template(
+            "index.html",
+            error="The model could not be loaded. Please try again later.",
+        ), 500
  
     file = request.files.get("image")
     if file is None or file.filename == "":
