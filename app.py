@@ -167,13 +167,19 @@ def healthz():
 def home():
     start_model_loading()
 
-    if request.method == "GET":
+    # GET and HEAD (Render's health/port checks send HEAD) just serve the page.
+    if request.method != "POST":
         return render_template("index.html")
 
     # ---- POST ----
     if _model is None:
-        # Wait up to 120 seconds for TensorFlow model loading
-        _model_ready_event.wait(timeout=120)
+        # Wait briefly for the background loader, but don't tie up a worker
+        # thread for minutes (only 2 threads are available).
+        if not _model_ready_event.wait(timeout=30):
+            return render_template(
+                "index.html",
+                error="The model is still loading. Please try again in a minute.",
+            ), 503
 
     if _model_error:
         logger.error("Model unavailable: %s", _model_error)
