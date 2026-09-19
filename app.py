@@ -183,16 +183,11 @@ def home():
  
     # ---- POST ----
     if _model is None:
-
-    # Wait up to 120 seconds for TensorFlow model loading
-    _model_ready_event.wait(timeout=120)
+        # Wait up to 120 seconds for TensorFlow model loading
+        _model_ready_event.wait(timeout=120)
 
     if _model_error:
-        logger.error(
-            "Model unavailable: %s",
-            _model_error
-        )
-
+        logger.error("Model unavailable: %s", _model_error)
         return render_template(
             "index.html",
             error="The prediction model is unavailable. Please try again later.",
